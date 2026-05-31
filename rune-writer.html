@@ -293,6 +293,15 @@
       transform: scaleX(-1);
     }
 
+    .rune-card.disabled-next {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .rune-card.disabled-next button {
+      cursor: not-allowed;
+    }
+
     .unknown {
       width: 64px;
       height: 64px;
@@ -402,6 +411,7 @@
 
   <script>
     const FINNISH_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖŊ";
+    const FINNISH_VOWELS = "AEIOUYÅÄÖ";
     const UNASSIGNED_RUNE_PREFIX = "__unassigned__";
 
     const points = {
@@ -493,6 +503,61 @@
 
     function runeKeyForText(text) {
       return Object.keys(runeMap).find(key => !isUnassignedRuneKey(key) && letterVariants(key).includes(text)) || null;
+    }
+
+    function letterRole(value) {
+      if (isUnassignedRuneKey(value)) return "unknown";
+
+      const roles = new Set(letterVariants(value).map(variant => {
+        const chars = [...variant];
+        if (chars.every(ch => FINNISH_VOWELS.includes(ch))) return "vowel";
+        if (chars.every(ch => FINNISH_LETTERS.includes(ch) && !FINNISH_VOWELS.includes(ch))) return "consonant";
+        return "unknown";
+      }));
+
+      return roles.size === 1 ? [...roles][0] : "unknown";
+    }
+
+    function currentTripletRoles(values) {
+      const roles = [];
+
+      for (const value of values) {
+        if (value === " " || value === "/") {
+          roles.length = 0;
+        } else if (runeMap[value]) {
+          const role = letterRole(value);
+          if (shouldStartNewTriplet(roles, role)) roles.length = 0;
+          roles.push(role);
+        }
+      }
+
+      return roles;
+    }
+
+    function isCompleteTriplet(roles) {
+      return roles.length === 3 || (roles.length === 2 && roles[0] === "vowel" && roles[1] === "consonant");
+    }
+
+    function isInvalidTripletContinuation(existingRoles, nextRole) {
+      if (!existingRoles.length) return false;
+      if (existingRoles.length === 1 && existingRoles[0] === nextRole && (nextRole === "consonant" || nextRole === "vowel")) return true;
+      if (existingRoles.length === 2 && existingRoles[0] === "consonant" && existingRoles[1] === "vowel" && nextRole !== "consonant") return true;
+      return false;
+    }
+
+    function shouldStartNewTriplet(existingRoles, nextRole) {
+      return isCompleteTriplet(existingRoles) || isInvalidTripletContinuation(existingRoles, nextRole);
+    }
+
+    function shouldReverseInTriplet(existingRoles, nextRole) {
+      const position = existingRoles.length;
+      if (position === 1 && existingRoles[0] === "vowel" && nextRole === "consonant") return true;
+      if (position === 2 && existingRoles[0] === "consonant" && existingRoles[1] === "vowel" && nextRole === "consonant") return true;
+      return false;
+    }
+
+    function canAppendToCurrentReadTriplet(letters) {
+      return !isInvalidTripletContinuation(currentTripletRoles(readRunes), letterRole(letters));
     }
 
     function decodedReadText(includeTripletBreaks) {
@@ -658,10 +723,12 @@
     function renderRuneSequence(container, tokens, size = 64) {
       let triplet = null;
       let tripletCount = 0;
+      let tripletRoles = [];
 
       function resetTriplet() {
         triplet = null;
         tripletCount = 0;
+        tripletRoles = [];
       }
 
       function appendBreak() {
@@ -673,19 +740,22 @@
         resetTriplet();
       }
 
-      function appendRune(edges) {
-        if (!triplet || tripletCount === 3) {
+      function appendRune(token) {
+        const role = token.role || "unknown";
+        if (!triplet || shouldStartNewTriplet(tripletRoles, role)) {
           triplet = document.createElement("span");
           triplet.className = "rune-triplet";
           triplet.style.setProperty("--rune-size", `${size}px`);
           container.appendChild(triplet);
           tripletCount = 0;
+          tripletRoles = [];
         }
 
-        const svg = runeSvg(edges, size);
-        if (tripletCount === 2) svg.classList.add("rune-reversed");
+        const svg = runeSvg(token.edges, size);
+        if (shouldReverseInTriplet(tripletRoles, role)) svg.classList.add("rune-reversed");
         triplet.appendChild(svg);
         tripletCount++;
+        tripletRoles.push(role);
       }
 
       for (const token of tokens) {
@@ -695,7 +765,7 @@
           resetTriplet();
           container.appendChild(makeUnknownToken(token.value));
         } else {
-          appendRune(token.edges);
+          appendRune(token);
         }
       }
     }
@@ -713,7 +783,7 @@
           .map(letters => {
             if (letters === " ") return { type: "space" };
             if (letters === "/") return { type: "triplet-break" };
-            return { type: "rune", edges: runeMap[letters] };
+            return { type: "rune", key: letters, edges: runeMap[letters], role: letterRole(letters) };
           })
           .filter(token => token.type === "space" || token.type === "triplet-break" || token.edges);
         renderRuneSequence(readSequence, tokens, 64);
@@ -724,9 +794,15 @@
     }
 
     function appendReadRune(letters) {
+      if (runeMap[letters] && !canAppendToCurrentReadTriplet(letters)) {
+        setStatus(`Cannot add ${displayLetters(letters)} here: the next rune must alternate vowel/consonant.`, "err");
+        return false;
+      }
+
       readRunes.push(letters);
       persistReadRunes();
       renderReadRunes();
+      return true;
     }
 
     function findRuneLettersByEdges(edges) {
@@ -745,29 +821,26 @@
         return;
       }
 
-      appendReadRune(letters);
-      setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
+      if (appendReadRune(letters)) setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
     }
 
-    function nextReadRuneWillBeReversed() {
-      let runeCount = 0;
-
-      for (const value of readRunes) {
-        if (value === " " || value === "/") runeCount = 0;
-        else if (runeMap[value]) runeCount = (runeCount + 1) % 3;
-      }
-
-      return runeCount === 2;
+    function nextReadRuneWillBeReversed(letters) {
+      return shouldReverseInTriplet(currentTripletRoles(readRunes), letterRole(letters));
     }
 
     function updateAlphabetSelectionState() {
-      const shouldReverse = nextReadRuneWillBeReversed();
-
       for (const card of alphabet.querySelectorAll(".rune-card")) {
+        const canAppend = canAppendToCurrentReadTriplet(card.dataset.letters);
+        const shouldReverse = canAppend && nextReadRuneWillBeReversed(card.dataset.letters);
+        const addButton = card.querySelector("button");
+        if (addButton) addButton.disabled = !canAppend;
+        card.classList.toggle("disabled-next", !canAppend);
         card.classList.toggle("next-reversed", shouldReverse);
         card.title = shouldReverse
-          ? "Click to load this rune. Shift+click to add it reversed as the third rune."
-          : "Click to load this rune. Shift+click to add it to the read sequence.";
+          ? "Click to load this rune. Shift+click to add it reversed by triplet rules."
+          : (canAppend
+            ? "Click to load this rune. Shift+click to add it to the read sequence."
+            : "This rune cannot be added next because the triplet must alternate vowel/consonant.");
       }
     }
 
@@ -786,11 +859,11 @@
       for (const [letters, edges] of entries) {
         const card = document.createElement("div");
         card.className = "rune-card";
+        card.dataset.letters = letters;
         card.title = "Click to load this rune. Shift+click to add it to the read sequence.";
         card.addEventListener("click", event => {
           if (event.shiftKey) {
-            appendReadRune(letters);
-            setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
+            if (appendReadRune(letters)) setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
             return;
           }
 
@@ -814,8 +887,7 @@
         addButton.title = `Add ${displayLetters(letters)} to the read sequence`;
         addButton.addEventListener("click", event => {
           event.stopPropagation();
-          appendReadRune(letters);
-          setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
+          if (appendReadRune(letters)) setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
         });
         card.appendChild(addButton);
 
@@ -968,7 +1040,7 @@
         if (!match) match = runeKeyForText(ch);
 
         if (match) {
-          tokens.push({ type: "rune", edges: runeMap[match] });
+          tokens.push({ type: "rune", key: match, edges: runeMap[match], role: letterRole(match) });
           i += mode === "longest" && letterVariants(match).includes(two) ? 2 : 1;
         } else {
           tokens.push({ type: "unknown", value: ch });
