@@ -1,6 +1,8 @@
     const FINNISH_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖŊ";
     const FINNISH_VOWELS = "AEIOUYÅÄÖ";
     const UNASSIGNED_RUNE_PREFIX = "__unassigned__";
+    const MAX_IMPORT_BYTES = 256 * 1024;
+    const MAX_RUNE_COUNT = 512;
 
     const points = {
       TL: [60, 60],  TM: [150, 60],  TR: [240, 60],
@@ -176,6 +178,32 @@
       return normalized;
     }
 
+    function validateRuneMap(map) {
+      if (!map || typeof map !== "object" || Array.isArray(map)) {
+        throw new Error("Rune data must be a JSON object.");
+      }
+
+      const normalized = normalizeRuneMapKeys(map);
+      const entries = Object.entries(normalized);
+      if (entries.length > MAX_RUNE_COUNT) {
+        throw new Error(`Rune data has too many entries. Maximum is ${MAX_RUNE_COUNT}.`);
+      }
+
+      for (const [letters, edges] of entries) {
+        if (!validRuneKey(letters)) throw new Error(`Invalid letter key: ${letters}`);
+        if (!Array.isArray(edges)) throw new Error(`Invalid strokes for ${displayLetters(letters)}.`);
+        if (edges.length > allEdgeKeys.length) throw new Error(`Too many strokes for ${displayLetters(letters)}.`);
+        if (!edges.every(edge => allEdgeKeys.includes(edge))) {
+          throw new Error(`Invalid strokes for ${displayLetters(letters)}.`);
+        }
+        if (new Set(edges).size !== edges.length) {
+          throw new Error(`Duplicate strokes for ${displayLetters(letters)}.`);
+        }
+      }
+
+      return normalized;
+    }
+
     function canonicalEdgeList(edgeSet) {
       return [...edgeSet].sort((a, b) => allEdgeKeys.indexOf(a) - allEdgeKeys.indexOf(b));
     }
@@ -187,8 +215,8 @@
     function loadRunes() {
       try {
         const loaded = JSON.parse(localStorage.getItem("runeMap.v1")) || {};
-        const normalized = normalizeRuneMapKeys(loaded);
-        if (Object.keys(loaded).some(key => key === ".")) {
+        const normalized = validateRuneMap(loaded);
+        if (JSON.stringify(loaded) !== JSON.stringify(normalized)) {
           localStorage.setItem("runeMap.v1", JSON.stringify(normalized));
         }
         return normalized;
@@ -205,7 +233,9 @@
       try {
         const loaded = JSON.parse(localStorage.getItem("readRunes.v1")) || [];
         if (!Array.isArray(loaded)) return [];
-        return loaded.filter(value => value === " " || value === "/" || runeMap[value]);
+        return loaded
+          .filter(value => value === " " || value === "/" || runeMap[value])
+          .slice(0, MAX_RUNE_COUNT);
       } catch {
         return [];
       }
@@ -289,8 +319,8 @@
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("viewBox", "0 0 300 300");
       svg.setAttribute("class", "mini-rune");
-      svg.style.width = `${size}px`;
-      svg.style.height = `${size}px`;
+      svg.setAttribute("width", size);
+      svg.setAttribute("height", size);
 
       for (const edge of edges) {
         const [a, b] = edge.split("-");
@@ -333,7 +363,6 @@
         if (!triplet || shouldStartNewTriplet(tripletRoles, role)) {
           triplet = document.createElement("span");
           triplet.className = "rune-triplet";
-          triplet.style.setProperty("--rune-size", `${size}px`);
           container.appendChild(triplet);
           tripletCount = 0;
           tripletRoles = [];
@@ -575,16 +604,15 @@
     }
 
     function importData(file) {
+      if (file.size > MAX_IMPORT_BYTES) {
+        setStatus(`Import failed: JSON file must be ${Math.floor(MAX_IMPORT_BYTES / 1024)} KB or smaller.`, "err");
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const imported = normalizeRuneMapKeys(JSON.parse(reader.result));
-          for (const [letters, edges] of Object.entries(imported)) {
-            if (!validRuneKey(letters)) throw new Error(`Invalid letter key: ${letters}`);
-            if (!Array.isArray(edges) || !edges.every(edge => allEdgeKeys.includes(edge))) {
-              throw new Error(`Invalid strokes for ${letters}`);
-            }
-          }
+          const imported = validateRuneMap(JSON.parse(reader.result));
           runeMap = imported;
           readRunes = readRunes.filter(value => value === " " || value === "/" || runeMap[value]);
           persistRunes();
