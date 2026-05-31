@@ -4,7 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="description" content="Create, save, write, and read custom Finnish rune alphabets in the browser." />
+  <meta property="og:title" content="EmuuRunes" />
+  <meta property="og:description" content="Create, save, write, and read custom Finnish rune alphabets in the browser." />
+  <meta property="og:type" content="website" />
   <title>EmuuRunes</title>
+  <link rel="preload" href="styles/common.css" as="style" />
+  <link rel="preload" href="styles/rune-writer.css" as="style" />
+  <link rel="preload" href="scripts/rune-writer.js" as="script" />
   <link rel="stylesheet" href="styles/common.css" />
   <link rel="stylesheet" href="styles/rune-writer.css" />
 </head>
@@ -86,6 +93,6 @@
     </div>
   </main>
 
-  <script src="scripts/rune-writer.js"></script>
+  <script src="scripts/rune-writer.js" defer></script>
 </body>
 </html>

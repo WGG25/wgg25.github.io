@@ -32,6 +32,7 @@
     let selectedLetters = null;
     let runeMap = loadRunes(); // { "A": ["TL-TR", ...], "KS": [...] }
     let readRunes = loadReadRunes();
+    let textRenderFrame = null;
 
     const builder = document.getElementById("builder");
     const alphabet = document.getElementById("alphabet");
@@ -290,15 +291,16 @@
 
     function renderBuilder() {
       builder.innerHTML = "";
+      const fragment = document.createDocumentFragment();
 
       for (const [a, b] of allowedEdges) {
         const key = edgeKey(a, b);
-        makeLine(builder, a, b, `edge-line ${activeEdges.has(key) ? "edge-on" : ""}`);
+        makeLine(fragment, a, b, `edge-line ${activeEdges.has(key) ? "edge-on" : ""}`);
       }
 
       for (const [a, b] of allowedEdges) {
         const key = edgeKey(a, b);
-        const hit = makeLine(builder, a, b, "edge-hit", { "data-edge": key });
+        const hit = makeLine(fragment, a, b, "edge-hit", { "data-edge": key });
         hit.addEventListener("click", () => {
           if (activeEdges.has(key)) activeEdges.delete(key);
           else activeEdges.add(key);
@@ -312,7 +314,8 @@
         });
       }
 
-      drawDots(builder);
+      drawDots(fragment);
+      builder.appendChild(fragment);
     }
 
     function runeSvg(edges, size = 78) {
@@ -339,6 +342,7 @@
     }
 
     function renderRuneSequence(container, tokens, size = 64) {
+      const fragment = document.createDocumentFragment();
       let triplet = null;
       let tripletCount = 0;
       let tripletRoles = [];
@@ -351,7 +355,7 @@
 
       function appendBreak() {
         resetTriplet();
-        container.appendChild(document.createElement("span")).className = "word-break";
+        fragment.appendChild(document.createElement("span")).className = "word-break";
       }
 
       function appendTripletBreak() {
@@ -363,7 +367,7 @@
         if (!triplet || shouldStartNewTriplet(tripletRoles, role)) {
           triplet = document.createElement("span");
           triplet.className = "rune-triplet";
-          container.appendChild(triplet);
+          fragment.appendChild(triplet);
           tripletCount = 0;
           tripletRoles = [];
         }
@@ -380,21 +384,25 @@
         else if (token.type === "triplet-break") appendTripletBreak();
         else if (token.type === "unknown") {
           resetTriplet();
-          container.appendChild(makeUnknownToken(token.value));
+          fragment.appendChild(makeUnknownToken(token.value));
         } else {
           appendRune(token);
         }
       }
+
+      container.appendChild(fragment);
     }
 
     function renderReadRunes() {
       readSequence.innerHTML = "";
+      const fragment = document.createDocumentFragment();
 
       if (!readRunes.length) {
         const empty = document.createElement("p");
         empty.className = "help";
         empty.textContent = "Click Add on saved runes, or draw/load a saved rune and click Add current rune.";
-        readSequence.appendChild(empty);
+        fragment.appendChild(empty);
+        readSequence.appendChild(fragment);
       } else {
         const tokens = readRunes
           .map(letters => {
@@ -473,6 +481,8 @@
         return;
       }
 
+      const fragment = document.createDocumentFragment();
+
       for (const [letters, edges] of entries) {
         const card = document.createElement("div");
         card.className = "rune-card";
@@ -508,9 +518,10 @@
         });
         card.appendChild(addButton);
 
-        alphabet.appendChild(card);
+        fragment.appendChild(card);
       }
 
+      alphabet.appendChild(fragment);
       renderReadRunes();
       updateAlphabetSelectionState();
     }
@@ -628,6 +639,11 @@
     }
 
     function renderTextAsRunes() {
+      if (textRenderFrame !== null) {
+        cancelAnimationFrame(textRenderFrame);
+        textRenderFrame = null;
+      }
+
       output.innerHTML = "";
       const text = document.getElementById("textInput").value.toUpperCase();
       const mode = document.getElementById("matchingMode").value;
@@ -667,6 +683,14 @@
       renderRuneSequence(output, tokens, 64);
     }
 
+    function scheduleRenderTextAsRunes() {
+      if (textRenderFrame !== null) return;
+      textRenderFrame = requestAnimationFrame(() => {
+        textRenderFrame = null;
+        renderTextAsRunes();
+      });
+    }
+
     document.getElementById("saveRune").addEventListener("click", saveRune);
     document.getElementById("deleteRune").addEventListener("click", deleteSelectedRune);
     document.getElementById("clearDrawing").addEventListener("click", clearDrawing);
@@ -682,7 +706,7 @@
       document.getElementById("textInput").value = "";
       output.innerHTML = "";
     });
-    document.getElementById("textInput").addEventListener("input", renderTextAsRunes);
+    document.getElementById("textInput").addEventListener("input", scheduleRenderTextAsRunes);
     document.getElementById("matchingMode").addEventListener("change", renderTextAsRunes);
     document.getElementById("addCurrentRune").addEventListener("click", addCurrentRuneToRead);
     document.getElementById("addTripletBreak").addEventListener("click", () => appendReadRune("/"));
