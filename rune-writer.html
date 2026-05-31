@@ -546,6 +546,24 @@
       }
     }
 
+    function syncBuilderSelectionWithSavedRune() {
+      if (activeEdges.size === 0) {
+        selectedLetters = null;
+        lettersEl.value = "";
+        return null;
+      }
+
+      const match = findRuneLettersByEdges(canonicalEdgeList(activeEdges));
+      if (!match) {
+        selectedLetters = null;
+        return null;
+      }
+
+      selectedLetters = match;
+      lettersEl.value = isUnassignedRuneKey(match) ? "" : match;
+      return match;
+    }
+
     function renderBuilder() {
       builder.innerHTML = "";
 
@@ -560,9 +578,13 @@
         hit.addEventListener("click", () => {
           if (activeEdges.has(key)) activeEdges.delete(key);
           else activeEdges.add(key);
-          selectedLetters = null;
+          const match = syncBuilderSelectionWithSavedRune();
           renderBuilder();
-          setStatus(`${activeEdges.size} stroke${activeEdges.size === 1 ? "" : "s"} selected.`);
+          if (match) {
+            setStatus(`Current shape matches ${displayLetters(match)}.`, "ok");
+          } else {
+            setStatus(`${activeEdges.size} stroke${activeEdges.size === 1 ? "" : "s"} selected.`);
+          }
         });
       }
 
