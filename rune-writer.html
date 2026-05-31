@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rune Constructor & Writer</title>
+  <title>EmuuRunes</title>
   <style>
     :root {
       --bg: #111318;
@@ -325,10 +325,7 @@
 </head>
 <body>
   <header>
-    <h1>Rune Constructor & Writer</h1>
-    <p class="subtitle">
-      Click the allowed strokes on the 3×3 dot grid to build a rune, assign it one or two Finnish letters, then type text and render it as runes.
-    </p>
+    <h1>EmuuRunes</h1>
   </header>
 
   <main>
@@ -338,7 +335,7 @@
         <svg id="builder" viewBox="0 0 300 300" aria-label="Rune builder"></svg>
 
         <div class="letter-row">
-          <label for="letters">Letters</label>
+          <label for="letters">Letter(s)</label>
           <input id="letters" class="letter-input" maxlength="2" placeholder="A or Ä" />
           <button id="saveRune" class="primary">Save rune</button>
         </div>
@@ -368,10 +365,10 @@
       </section>
 
       <section>
-        <h2>Write with runes</h2>
+        <h2>Text to Runes</h2>
         <textarea id="textInput" placeholder="Type Finnish text here, e.g. TÄMÄ ON RUNOKIRJOITUS"></textarea>
         <div class="write-controls">
-          <button id="renderText" class="good">Render text</button>
+          <button id="renderText" class="good">Translate</button>
           <button id="clearText">Clear text</button>
           <label>
             Matching
@@ -385,7 +382,7 @@
       </section>
 
       <section>
-        <h2>Read runes as text</h2>
+        <h2>Runes to Text</h2>
         <div class="read-controls">
           <button id="addCurrentRune" class="good">Add current rune</button>
           <button id="addTripletBreak">End triplet</button>
@@ -867,6 +864,15 @@
     document.getElementById("clearReadRunes").addEventListener("click", () => {
       readRunes = [];
       renderReadRunes();
+    });
+
+    document.addEventListener("keydown", event => {
+      const tag = event.target.tagName;
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target.isContentEditable;
+      if (isTyping || event.code !== "Space") return;
+
+      event.preventDefault();
+      appendReadRune(event.shiftKey ? "/" : " ");
     });
 
     lettersEl.addEventListener("input", () => {
