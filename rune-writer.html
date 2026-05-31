@@ -32,8 +32,45 @@
     }
 
     header {
+      position: relative;
       padding: 28px 18px 10px;
       text-align: center;
+    }
+
+    .home-link {
+      position: absolute;
+      left: 18px;
+      top: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      color: var(--text);
+      text-decoration: none;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0;
+      font-size: 0;
+      transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .home-link::before {
+      content: "<";
+      display: block;
+      font-size: 1.35rem;
+      font-weight: 800;
+      line-height: 1;
+      transform: translate(1px, -1px);
+    }
+
+    .home-link:hover,
+    .home-link:focus-visible {
+      border-color: var(--line);
+      background: #2a3245;
+      box-shadow: 0 18px 48px var(--shadow), 0 0 0 1px rgba(143, 211, 255, 0.12);
+      outline: none;
     }
 
     h1 {
@@ -330,10 +367,22 @@
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
     }
+
+    @media (max-width: 620px) {
+      header {
+        padding-top: 72px;
+      }
+
+      .home-link {
+        left: 12px;
+        top: 16px;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
+    <a class="home-link" href="index.html" aria-label="Back to tool index"></a>
     <h1>EmuuRunes</h1>
   </header>
 
