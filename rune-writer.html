@@ -479,6 +479,8 @@
     }
 
     function decodedReadValue(value) {
+      if (value === " ") return " ";
+      if (value === "/") return "/";
       if (isUnassignedRuneKey(value)) return ".";
       const variants = letterVariants(value);
       return variants.length > 1 ? `[${variants.join("|")}]` : variants[0];
