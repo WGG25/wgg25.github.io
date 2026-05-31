@@ -375,6 +375,7 @@
         <h2>Read runes as text</h2>
         <div class="read-controls">
           <button id="addCurrentRune" class="good">Add current rune</button>
+          <button id="addTripletBreak">End triplet</button>
           <button id="addSpaceRune">Add space</button>
           <button id="undoReadRune">Undo</button>
           <button id="clearReadRunes">Clear</button>
@@ -544,6 +545,10 @@
         container.appendChild(document.createElement("span")).className = "word-break";
       }
 
+      function appendTripletBreak() {
+        resetTriplet();
+      }
+
       function appendRune(edges) {
         if (!triplet || tripletCount === 3) {
           triplet = document.createElement("span");
@@ -559,6 +564,7 @@
 
       for (const token of tokens) {
         if (token.type === "space") appendBreak();
+        else if (token.type === "triplet-break") appendTripletBreak();
         else if (token.type === "unknown") {
           resetTriplet();
           container.appendChild(makeUnknownToken(token.value));
@@ -578,8 +584,12 @@
         readSequence.appendChild(empty);
       } else {
         const tokens = readRunes
-          .map(letters => letters === " " ? { type: "space" } : { type: "rune", edges: runeMap[letters] })
-          .filter(token => token.type === "space" || token.edges);
+          .map(letters => {
+            if (letters === " ") return { type: "space" };
+            if (letters === "/") return { type: "triplet-break" };
+            return { type: "rune", edges: runeMap[letters] };
+          })
+          .filter(token => token.type === "space" || token.type === "triplet-break" || token.edges);
         renderRuneSequence(readSequence, tokens, 64);
       }
 
@@ -732,7 +742,7 @@
             }
           }
           runeMap = imported;
-          readRunes = readRunes.filter(value => value === " " || runeMap[value]);
+          readRunes = readRunes.filter(value => value === " " || value === "/" || runeMap[value]);
           persistRunes();
           renderAlphabet();
           renderReadRunes();
@@ -756,6 +766,12 @@
 
         if (/\s/.test(ch)) {
           tokens.push({ type: "space" });
+          i++;
+          continue;
+        }
+
+        if (ch === "/") {
+          tokens.push({ type: "triplet-break" });
           i++;
           continue;
         }
@@ -797,6 +813,7 @@
     document.getElementById("textInput").addEventListener("input", renderTextAsRunes);
     document.getElementById("matchingMode").addEventListener("change", renderTextAsRunes);
     document.getElementById("addCurrentRune").addEventListener("click", addCurrentRuneToRead);
+    document.getElementById("addTripletBreak").addEventListener("click", () => appendReadRune("/"));
     document.getElementById("addSpaceRune").addEventListener("click", () => appendReadRune(" "));
     document.getElementById("undoReadRune").addEventListener("click", () => {
       readRunes.pop();
