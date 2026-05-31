@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rune Constructor & Writer</title>
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #1b1f2a;
+      --panel-2: #242a38;
+      --text: #edf0f7;
+      --muted: #aab2c5;
+      --line: #8fd3ff;
+      --line-ghost: #3d5870;
+      --accent: #f2c94c;
+      --danger: #ff6b6b;
+      --ok: #72e39f;
+      --border: #343c50;
+      --dot: #f7f9ff;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1b2637 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 28px 18px 10px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 0 auto;
+      color: var(--muted);
+      max-width: 760px;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 24px));
+      margin: 18px auto 40px;
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) 1fr;
+      gap: 18px;
+    }
+
+    section, .card {
+      background: linear-gradient(180deg, var(--panel), #151922);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 16px 40px var(--shadow);
+      padding: 18px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.15rem;
+    }
+
+    .builder-wrap {
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+    }
+
+    svg {
+      width: min(100%, 360px);
+      height: auto;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      background: #0e1118;
+      border-radius: 18px;
+      border: 1px solid #2b3345;
+    }
+
+    .edge-hit {
+      stroke: transparent;
+      stroke-width: 18;
+      cursor: pointer;
+    }
+
+    .edge-line {
+      stroke: var(--line-ghost);
+      stroke-width: 5;
+      stroke-linecap: round;
+      opacity: 0.42;
+      pointer-events: none;
+    }
+
+    .edge-on {
+      stroke: var(--line);
+      opacity: 1;
+      filter: drop-shadow(0 0 8px rgba(143, 211, 255, 0.35));
+    }
+
+    .dot {
+      fill: var(--dot);
+      stroke: #0e1118;
+      stroke-width: 3;
+      pointer-events: none;
+    }
+
+    .dot-center { fill: var(--accent); }
+
+    .controls, .letter-row, .actions, .write-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    input, textarea, select, button {
+      font: inherit;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    input, textarea, select {
+      background: #0e1118;
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--line);
+      box-shadow: 0 0 0 3px rgba(143, 211, 255, 0.16);
+    }
+
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: #51617f;
+      background: #2a3245;
+    }
+
+    button.primary {
+      background: #174c6a;
+      border-color: #2f8dc4;
+    }
+
+    button.danger {
+      background: #4b1d24;
+      border-color: #8a3540;
+    }
+
+    button.good {
+      background: #1d5131;
+      border-color: #32975a;
+    }
+
+    .letter-input {
+      width: 150px;
+      text-transform: uppercase;
+    }
+
+    .status {
+      min-height: 1.3em;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+
+    .grid-right {
+      display: grid;
+      gap: 18px;
+    }
+
+    .alphabet {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+    }
+
+    .rune-card {
+      background: #0e1118;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      display: grid;
+      justify-items: center;
+      gap: 6px;
+      min-height: 126px;
+      cursor: pointer;
+    }
+
+    .rune-card:hover { border-color: var(--line); }
+
+    .rune-label {
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .mini-rune {
+      width: 78px;
+      height: 78px;
+      border: none;
+      background: transparent;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 86px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .output {
+      min-height: 140px;
+      background: #0e1118;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .word-break {
+      width: 24px;
+      height: 1px;
+    }
+
+    .unknown {
+      width: 64px;
+      height: 64px;
+      border: 1px dashed #596274;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .help {
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.94rem;
+    }
+
+    .help code {
+      background: #0e1118;
+      padding: 2px 5px;
+      border-radius: 6px;
+      color: #d5e8ff;
+    }
+
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Rune Constructor & Writer</h1>
+    <p class="subtitle">
+      Click the allowed strokes on the 3×3 dot grid to build a rune, assign it one or two Finnish letters, then type text and render it as runes.
+    </p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Construct a rune</h2>
+      <div class="builder-wrap">
+        <svg id="builder" viewBox="0 0 300 300" aria-label="Rune builder"></svg>
+
+        <div class="letter-row">
+          <label for="letters">Letters</label>
+          <input id="letters" class="letter-input" maxlength="2" placeholder="A or Ä" />
+          <button id="saveRune" class="primary">Save rune</button>
+        </div>
+
+        <div class="actions">
+          <button id="clearDrawing">Clear drawing</button>
+          <button id="deleteRune" class="danger">Delete selected</button>
+          <button id="exportData">Export JSON</button>
+          <label>
+            <input id="importData" type="file" accept="application/json" hidden />
+            <button type="button" id="importButton">Import JSON</button>
+          </label>
+        </div>
+
+        <div id="status" class="status"></div>
+      </div>
+
+      <p class="help">
+        Allowed strokes: the outer rectangle sides, neighboring edge-middle connections around the diamond, and edge-middle-to-center spokes. Click a stroke again to remove it.
+      </p>
+    </section>
+
+    <div class="grid-right">
+      <section>
+        <h2>Rune alphabet</h2>
+        <div id="alphabet" class="alphabet"></div>
+      </section>
+
+      <section>
+        <h2>Write with runes</h2>
+        <textarea id="textInput" placeholder="Type Finnish text here, e.g. TÄMÄ ON RUNOKIRJOITUS"></textarea>
+        <div class="write-controls">
+          <button id="renderText" class="good">Render text</button>
+          <button id="clearText">Clear text</button>
+          <label>
+            Matching
+            <select id="matchingMode">
+              <option value="longest">prefer two-letter runes</option>
+              <option value="single">single letters only</option>
+            </select>
+          </label>
+        </div>
+        <div id="output" class="output" aria-label="Rune output"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const FINNISH_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+
+    const points = {
+      TL: [60, 60],  TM: [150, 60],  TR: [240, 60],
+      ML: [60, 150], C:  [150, 150], MR: [240, 150],
+      BL: [60, 240], BM: [150, 240], BR: [240, 240],
+    };
+
+    // Only these connections are allowed.
+    const allowedEdges = [
+    // outer rectangle, split into half-edges so corners can connect to edge-middle dots
+    ["TL", "TM"], ["TM", "TR"],
+    ["TR", "MR"], ["MR", "BR"],
+    ["BR", "BM"], ["BM", "BL"],
+    ["BL", "ML"], ["ML", "TL"],
+
+    // edge middles as neighbors
+    ["TM", "MR"], ["MR", "BM"], ["BM", "ML"], ["ML", "TM"],
+
+    // edge middles to center
+    ["TM", "C"], ["MR", "C"], ["BM", "C"], ["ML", "C"],
+    ];
+
+    const edgeKey = (a, b) => [a, b].sort().join("-");
+    const allEdgeKeys = allowedEdges.map(([a, b]) => edgeKey(a, b));
+
+    let activeEdges = new Set();
+    let selectedLetters = null;
+    let runeMap = loadRunes(); // { "A": ["TL-TR", ...], "KS": [...] }
+
+    const builder = document.getElementById("builder");
+    const alphabet = document.getElementById("alphabet");
+    const statusEl = document.getElementById("status");
+    const lettersEl = document.getElementById("letters");
+    const output = document.getElementById("output");
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+    }
+
+    function normalizeLetters(value) {
+      return value.trim().toUpperCase().replace(/\s+/g, "");
+    }
+
+    function validLetters(value) {
+      if (!value || value.length > 2) return false;
+      return [...value].every(ch => FINNISH_LETTERS.includes(ch));
+    }
+
+    function canonicalEdgeList(edgeSet) {
+      return [...edgeSet].sort((a, b) => allEdgeKeys.indexOf(a) - allEdgeKeys.indexOf(b));
+    }
+
+    function sameRune(a, b) {
+      return JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+    }
+
+    function loadRunes() {
+      try {
+        return JSON.parse(localStorage.getItem("runeMap.v1")) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function persistRunes() {
+      localStorage.setItem("runeMap.v1", JSON.stringify(runeMap));
+    }
+
+    function makeLine(svg, a, b, className, extra = {}) {
+      const [x1, y1] = points[a];
+      const [x2, y2] = points[b];
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", x1);
+      line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2);
+      line.setAttribute("y2", y2);
+      line.setAttribute("class", className);
+      for (const [key, value] of Object.entries(extra)) line.setAttribute(key, value);
+      svg.appendChild(line);
+      return line;
+    }
+
+    function drawDots(svg, scale = 1) {
+      for (const [name, [x, y]] of Object.entries(points)) {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", x);
+        dot.setAttribute("cy", y);
+        dot.setAttribute("r", name === "C" ? 8 * scale : 7 * scale);
+        dot.setAttribute("class", name === "C" ? "dot dot-center" : "dot");
+        svg.appendChild(dot);
+      }
+    }
+
+    function renderBuilder() {
+      builder.innerHTML = "";
+
+      for (const [a, b] of allowedEdges) {
+        const key = edgeKey(a, b);
+        makeLine(builder, a, b, `edge-line ${activeEdges.has(key) ? "edge-on" : ""}`);
+      }
+
+      for (const [a, b] of allowedEdges) {
+        const key = edgeKey(a, b);
+        const hit = makeLine(builder, a, b, "edge-hit", { "data-edge": key });
+        hit.addEventListener("click", () => {
+          if (activeEdges.has(key)) activeEdges.delete(key);
+          else activeEdges.add(key);
+          selectedLetters = null;
+          renderBuilder();
+          setStatus(`${activeEdges.size} stroke${activeEdges.size === 1 ? "" : "s"} selected.`);
+        });
+      }
+
+      drawDots(builder);
+    }
+
+    function runeSvg(edges, size = 78) {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 300 300");
+      svg.setAttribute("class", "mini-rune");
+      svg.style.width = `${size}px`;
+      svg.style.height = `${size}px`;
+
+      for (const edge of edges) {
+        const [a, b] = edge.split("-");
+        makeLine(svg, a, b, "edge-line edge-on");
+      }
+      drawDots(svg, 0.8);
+      return svg;
+    }
+
+    function renderAlphabet() {
+      alphabet.innerHTML = "";
+      const entries = Object.entries(runeMap).sort(([a], [b]) => a.localeCompare(b, "fi"));
+
+      if (!entries.length) {
+        const empty = document.createElement("p");
+        empty.className = "help";
+        empty.textContent = "No runes saved yet. Draw one, enter one or two letters, and click Save rune.";
+        alphabet.appendChild(empty);
+        return;
+      }
+
+      for (const [letters, edges] of entries) {
+        const card = document.createElement("div");
+        card.className = "rune-card";
+        card.title = "Click to load this rune into the builder";
+        card.addEventListener("click", () => {
+          activeEdges = new Set(edges);
+          selectedLetters = letters;
+          lettersEl.value = letters;
+          renderBuilder();
+          setStatus(`Loaded rune for ${letters}.`, "ok");
+        });
+
+        const label = document.createElement("div");
+        label.className = "rune-label";
+        label.textContent = letters;
+
+        card.appendChild(runeSvg(edges));
+        card.appendChild(label);
+        alphabet.appendChild(card);
+      }
+    }
+
+    function saveRune() {
+      const letters = normalizeLetters(lettersEl.value);
+      if (!validLetters(letters)) {
+        setStatus("Use one or two Finnish alphabet letters: A-Z, Å, Ä, Ö.", "err");
+        return;
+      }
+      if (activeEdges.size === 0) {
+        setStatus("Draw at least one stroke before saving.", "err");
+        return;
+      }
+
+      const edges = canonicalEdgeList(activeEdges);
+      const duplicate = Object.entries(runeMap).find(([key, value]) => key !== letters && sameRune(value, edges));
+      if (duplicate) {
+        setStatus(`That shape is already assigned to ${duplicate[0]}.`, "err");
+        return;
+      }
+
+      runeMap[letters] = edges;
+      selectedLetters = letters;
+      persistRunes();
+      renderAlphabet();
+      setStatus(`Saved rune for ${letters}.`, "ok");
+    }
+
+    function deleteSelectedRune() {
+      const letters = normalizeLetters(lettersEl.value || selectedLetters || "");
+      if (!letters || !runeMap[letters]) {
+        setStatus("Enter or select a saved rune to delete.", "err");
+        return;
+      }
+      delete runeMap[letters];
+      persistRunes();
+      selectedLetters = null;
+      renderAlphabet();
+      setStatus(`Deleted rune for ${letters}.`, "ok");
+    }
+
+    function clearDrawing() {
+      activeEdges.clear();
+      selectedLetters = null;
+      lettersEl.value = "";
+      renderBuilder();
+      setStatus("Drawing cleared.");
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(runeMap, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "rune-alphabet.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus("Exported rune alphabet as JSON.", "ok");
+    }
+
+    function importData(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const imported = JSON.parse(reader.result);
+          for (const [letters, edges] of Object.entries(imported)) {
+            if (!validLetters(letters)) throw new Error(`Invalid letter key: ${letters}`);
+            if (!Array.isArray(edges) || !edges.every(edge => allEdgeKeys.includes(edge))) {
+              throw new Error(`Invalid strokes for ${letters}`);
+            }
+          }
+          runeMap = imported;
+          persistRunes();
+          renderAlphabet();
+          setStatus("Imported rune alphabet.", "ok");
+        } catch (err) {
+          setStatus(`Import failed: ${err.message}`, "err");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function renderTextAsRunes() {
+      output.innerHTML = "";
+      const text = document.getElementById("textInput").value.toUpperCase();
+      const mode = document.getElementById("matchingMode").value;
+      let i = 0;
+
+      while (i < text.length) {
+        const ch = text[i];
+
+        if (/\s/.test(ch)) {
+          output.appendChild(document.createElement("span")).className = "word-break";
+          i++;
+          continue;
+        }
+
+        const two = text.slice(i, i + 2);
+        let match = null;
+
+        if (mode === "longest" && two.length === 2 && runeMap[two]) match = two;
+        else if (runeMap[ch]) match = ch;
+        else if (runeMap[two] && mode === "longest") match = two;
+
+        if (match) {
+          output.appendChild(runeSvg(runeMap[match], 64));
+          i += match.length;
+        } else {
+          const unknown = document.createElement("div");
+          unknown.className = "unknown";
+          unknown.textContent = ch;
+          unknown.title = `No rune assigned for ${ch}`;
+          output.appendChild(unknown);
+          i++;
+        }
+      }
+    }
+
+    document.getElementById("saveRune").addEventListener("click", saveRune);
+    document.getElementById("deleteRune").addEventListener("click", deleteSelectedRune);
+    document.getElementById("clearDrawing").addEventListener("click", clearDrawing);
+    document.getElementById("exportData").addEventListener("click", exportData);
+    document.getElementById("importButton").addEventListener("click", () => document.getElementById("importData").click());
+    document.getElementById("importData").addEventListener("change", event => {
+      const file = event.target.files[0];
+      if (file) importData(file);
+      event.target.value = "";
+    });
+    document.getElementById("renderText").addEventListener("click", renderTextAsRunes);
+    document.getElementById("clearText").addEventListener("click", () => {
+      document.getElementById("textInput").value = "";
+      output.innerHTML = "";
+    });
+    document.getElementById("textInput").addEventListener("input", renderTextAsRunes);
+    document.getElementById("matchingMode").addEventListener("change", renderTextAsRunes);
+
+    lettersEl.addEventListener("input", () => {
+      lettersEl.value = normalizeLetters(lettersEl.value);
+    });
+
+    renderBuilder();
+    renderAlphabet();
+  </script>
+</body>
+</html>
