@@ -430,8 +430,8 @@
 
     let activeEdges = new Set();
     let selectedLetters = null;
-    let readRunes = [];
     let runeMap = loadRunes(); // { "A": ["TL-TR", ...], "KS": [...] }
+    let readRunes = loadReadRunes();
 
     const builder = document.getElementById("builder");
     const alphabet = document.getElementById("alphabet");
@@ -546,6 +546,20 @@
 
     function persistRunes() {
       localStorage.setItem("runeMap.v1", JSON.stringify(runeMap));
+    }
+
+    function loadReadRunes() {
+      try {
+        const loaded = JSON.parse(localStorage.getItem("readRunes.v1")) || [];
+        if (!Array.isArray(loaded)) return [];
+        return loaded.filter(value => value === " " || value === "/" || runeMap[value]);
+      } catch {
+        return [];
+      }
+    }
+
+    function persistReadRunes() {
+      localStorage.setItem("readRunes.v1", JSON.stringify(readRunes));
     }
 
     function makeLine(svg, a, b, className, extra = {}) {
@@ -711,6 +725,7 @@
 
     function appendReadRune(letters) {
       readRunes.push(letters);
+      persistReadRunes();
       renderReadRunes();
     }
 
@@ -850,6 +865,7 @@
       if (previousKey && previousKey !== letters) {
         delete runeMap[previousKey];
         readRunes = readRunes.map(value => value === previousKey ? letters : value);
+        persistReadRunes();
       }
 
       runeMap[letters] = edges;
@@ -870,6 +886,7 @@
       delete runeMap[letters];
       readRunes = readRunes.filter(value => value !== letters);
       persistRunes();
+      persistReadRunes();
       selectedLetters = null;
       renderAlphabet();
       renderReadRunes();
@@ -911,6 +928,7 @@
           runeMap = imported;
           readRunes = readRunes.filter(value => value === " " || value === "/" || runeMap[value]);
           persistRunes();
+          persistReadRunes();
           renderAlphabet();
           renderReadRunes();
           setStatus("Imported rune alphabet.", "ok");
@@ -983,10 +1001,12 @@
     document.getElementById("addSpaceRune").addEventListener("click", () => appendReadRune(" "));
     document.getElementById("undoReadRune").addEventListener("click", () => {
       readRunes.pop();
+      persistReadRunes();
       renderReadRunes();
     });
     document.getElementById("clearReadRunes").addEventListener("click", () => {
       readRunes = [];
+      persistReadRunes();
       renderReadRunes();
     });
     document.getElementById("plainReadText").addEventListener("change", renderReadRunes);
