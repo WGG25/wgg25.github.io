@@ -176,7 +176,7 @@
     }
 
     .letter-input {
-      width: 150px;
+      width: 240px;
       text-transform: uppercase;
     }
 
@@ -336,7 +336,7 @@
 
         <div class="letter-row">
           <label for="letters">Letter(s)</label>
-          <input id="letters" class="letter-input" maxlength="2" placeholder="A or Ä" />
+          <input id="letters" class="letter-input" placeholder="A, Ä or AA, A" />
           <button id="saveRune" class="primary">Save rune</button>
         </div>
 
@@ -450,6 +450,17 @@
       return value.trim().toUpperCase().replace(/\s+/g, "");
     }
 
+    function letterVariants(value) {
+      return value
+        .split(/[|,;]+/)
+        .map(normalizeLetters)
+        .filter(Boolean);
+    }
+
+    function canonicalLetterKey(value) {
+      return [...new Set(letterVariants(value))].join("|");
+    }
+
     function validLetters(value) {
       if (!value || value.length > 2) return false;
       return [...value].every(ch => FINNISH_LETTERS.includes(ch));
@@ -460,15 +471,26 @@
     }
 
     function validRuneKey(value) {
-      return isUnassignedRuneKey(value) || validLetters(value);
+      return isUnassignedRuneKey(value) || (letterVariants(value).length > 0 && letterVariants(value).every(validLetters));
     }
 
     function displayLetters(value) {
-      return isUnassignedRuneKey(value) ? "." : value;
+      return isUnassignedRuneKey(value) ? "." : letterVariants(value).join(" / ");
     }
 
     function decodedReadValue(value) {
-      return isUnassignedRuneKey(value) ? "." : value;
+      if (isUnassignedRuneKey(value)) return ".";
+      const variants = letterVariants(value);
+      return variants.length > 1 ? `[${variants.join("|")}]` : variants[0];
+    }
+
+    function sharesAnyVariant(a, b) {
+      const bVariants = new Set(letterVariants(b));
+      return letterVariants(a).some(variant => bVariants.has(variant));
+    }
+
+    function runeKeyForText(text) {
+      return Object.keys(runeMap).find(key => !isUnassignedRuneKey(key) && letterVariants(key).includes(text)) || null;
     }
 
     function decodedReadText(includeTripletBreaks) {
@@ -490,7 +512,10 @@
       const normalized = {};
 
       for (const [key, edges] of Object.entries(map)) {
-        normalized[key === "." ? makeUnassignedRuneKey(normalized) : key] = edges;
+        const normalizedKey = key === "."
+          ? makeUnassignedRuneKey(normalized)
+          : (isUnassignedRuneKey(key) ? key : canonicalLetterKey(key));
+        normalized[normalizedKey] = edges;
       }
 
       return normalized;
@@ -560,7 +585,7 @@
       }
 
       selectedLetters = match;
-      lettersEl.value = isUnassignedRuneKey(match) ? "" : match;
+      lettersEl.value = isUnassignedRuneKey(match) ? "" : letterVariants(match).join(", ");
       return match;
     }
 
@@ -754,7 +779,7 @@
 
           activeEdges = new Set(edges);
           selectedLetters = letters;
-          lettersEl.value = isUnassignedRuneKey(letters) ? "" : letters;
+          lettersEl.value = isUnassignedRuneKey(letters) ? "" : letterVariants(letters).join(", ");
           renderBuilder();
           setStatus(`Loaded rune for ${displayLetters(letters)}.`, "ok");
         });
@@ -785,10 +810,10 @@
     }
 
     function saveRune() {
-      const normalizedLetters = normalizeLetters(lettersEl.value);
+      const normalizedLetters = canonicalLetterKey(lettersEl.value);
       const letters = normalizedLetters || (isUnassignedRuneKey(selectedLetters || "") ? selectedLetters : makeUnassignedRuneKey());
       if (!validRuneKey(letters)) {
-        setStatus("Use one or two Finnish alphabet letters, or leave the field empty for a placeholder rune.", "err");
+        setStatus("Use one or more one/two-letter variants separated by commas, or leave the field empty for a placeholder rune.", "err");
         return;
       }
       if (activeEdges.size === 0) {
@@ -800,6 +825,13 @@
       const previousKey = selectedLetters && runeMap[selectedLetters] && sameRune(runeMap[selectedLetters], edges)
         ? selectedLetters
         : null;
+      const variantDuplicate = Object.keys(runeMap)
+        .find(key => key !== previousKey && !isUnassignedRuneKey(key) && !isUnassignedRuneKey(letters) && sharesAnyVariant(key, letters));
+      if (variantDuplicate) {
+        setStatus(`${displayLetters(variantDuplicate)} already uses one of those variants.`, "err");
+        return;
+      }
+
       const existingTarget = runeMap[letters];
       if (existingTarget && letters !== previousKey && !sameRune(existingTarget, edges)) {
         setStatus(`${displayLetters(letters)} is already assigned to another rune.`, "err");
@@ -827,7 +859,7 @@
 
     function deleteSelectedRune() {
       const letters = lettersEl.value.trim()
-        ? normalizeLetters(lettersEl.value)
+        ? canonicalLetterKey(lettersEl.value)
         : selectedLetters;
       if (!letters || !runeMap[letters]) {
         setStatus("Enter or select a saved rune to delete.", "err");
@@ -912,13 +944,12 @@
         const two = text.slice(i, i + 2);
         let match = null;
 
-        if (mode === "longest" && two.length === 2 && runeMap[two]) match = two;
-        else if (runeMap[ch]) match = ch;
-        else if (runeMap[two] && mode === "longest") match = two;
+        if (mode === "longest" && two.length === 2) match = runeKeyForText(two);
+        if (!match) match = runeKeyForText(ch);
 
         if (match) {
           tokens.push({ type: "rune", edges: runeMap[match] });
-          i += match.length;
+          i += mode === "longest" && letterVariants(match).includes(two) ? 2 : 1;
         } else {
           tokens.push({ type: "unknown", value: ch });
           i++;
