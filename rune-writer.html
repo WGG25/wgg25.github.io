@@ -389,6 +389,10 @@
           <button id="addSpaceRune">Add space</button>
           <button id="undoReadRune">Undo</button>
           <button id="clearReadRunes">Clear</button>
+          <label>
+            <input id="plainReadText" type="checkbox" />
+            Text only
+          </label>
         </div>
         <div id="readSequence" class="output read-output" aria-label="Selected rune sequence"></div>
         <textarea id="readText" class="read-text" readonly placeholder="Selected runes will decode here"></textarea>
@@ -605,7 +609,9 @@
         renderRuneSequence(readSequence, tokens, 64);
       }
 
-      readText.value = readRunes.join("");
+      readText.value = document.getElementById("plainReadText").checked
+        ? readRunes.filter(value => value !== "/").join("")
+        : readRunes.join("");
       updateAlphabetSelectionState();
     }
 
@@ -865,6 +871,7 @@
       readRunes = [];
       renderReadRunes();
     });
+    document.getElementById("plainReadText").addEventListener("change", renderReadRunes);
 
     document.addEventListener("keydown", event => {
       const tag = event.target.tagName;
