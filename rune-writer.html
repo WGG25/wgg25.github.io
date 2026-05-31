@@ -402,6 +402,7 @@
 
   <script>
     const FINNISH_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+    const UNASSIGNED_RUNE_PREFIX = "__unassigned__";
 
     const points = {
       TL: [60, 60],  TM: [150, 60],  TR: [240, 60],
@@ -454,6 +455,47 @@
       return [...value].every(ch => FINNISH_LETTERS.includes(ch));
     }
 
+    function isUnassignedRuneKey(value) {
+      return value === "." || value.startsWith(`${UNASSIGNED_RUNE_PREFIX}:`);
+    }
+
+    function validRuneKey(value) {
+      return isUnassignedRuneKey(value) || validLetters(value);
+    }
+
+    function displayLetters(value) {
+      return isUnassignedRuneKey(value) ? "." : value;
+    }
+
+    function decodedReadValue(value) {
+      return isUnassignedRuneKey(value) ? "." : value;
+    }
+
+    function decodedReadText(includeTripletBreaks) {
+      return readRunes
+        .filter(value => includeTripletBreaks || value !== "/")
+        .map(decodedReadValue)
+        .join("");
+    }
+
+    function makeUnassignedRuneKey(map = runeMap) {
+      let key;
+      do {
+        key = `${UNASSIGNED_RUNE_PREFIX}:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      } while (map[key]);
+      return key;
+    }
+
+    function normalizeRuneMapKeys(map) {
+      const normalized = {};
+
+      for (const [key, edges] of Object.entries(map)) {
+        normalized[key === "." ? makeUnassignedRuneKey(normalized) : key] = edges;
+      }
+
+      return normalized;
+    }
+
     function canonicalEdgeList(edgeSet) {
       return [...edgeSet].sort((a, b) => allEdgeKeys.indexOf(a) - allEdgeKeys.indexOf(b));
     }
@@ -464,7 +506,12 @@
 
     function loadRunes() {
       try {
-        return JSON.parse(localStorage.getItem("runeMap.v1")) || {};
+        const loaded = JSON.parse(localStorage.getItem("runeMap.v1")) || {};
+        const normalized = normalizeRuneMapKeys(loaded);
+        if (Object.keys(loaded).some(key => key === ".")) {
+          localStorage.setItem("runeMap.v1", JSON.stringify(normalized));
+        }
+        return normalized;
       } catch {
         return {};
       }
@@ -609,9 +656,7 @@
         renderRuneSequence(readSequence, tokens, 64);
       }
 
-      readText.value = document.getElementById("plainReadText").checked
-        ? readRunes.filter(value => value !== "/").join("")
-        : readRunes.join("");
+      readText.value = decodedReadText(!document.getElementById("plainReadText").checked);
       updateAlphabetSelectionState();
     }
 
@@ -637,7 +682,7 @@
       }
 
       appendReadRune(letters);
-      setStatus(`Added ${letters} to the read sequence.`, "ok");
+      setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
     }
 
     function nextReadRuneWillBeReversed() {
@@ -681,20 +726,20 @@
         card.addEventListener("click", event => {
           if (event.shiftKey) {
             appendReadRune(letters);
-            setStatus(`Added ${letters} to the read sequence.`, "ok");
+            setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
             return;
           }
 
           activeEdges = new Set(edges);
           selectedLetters = letters;
-          lettersEl.value = letters;
+          lettersEl.value = isUnassignedRuneKey(letters) ? "" : letters;
           renderBuilder();
-          setStatus(`Loaded rune for ${letters}.`, "ok");
+          setStatus(`Loaded rune for ${displayLetters(letters)}.`, "ok");
         });
 
         const label = document.createElement("div");
         label.className = "rune-label";
-        label.textContent = letters;
+        label.textContent = displayLetters(letters);
 
         card.appendChild(runeSvg(edges));
         card.appendChild(label);
@@ -702,11 +747,11 @@
         const addButton = document.createElement("button");
         addButton.type = "button";
         addButton.textContent = "Add";
-        addButton.title = `Add ${letters} to the read sequence`;
+        addButton.title = `Add ${displayLetters(letters)} to the read sequence`;
         addButton.addEventListener("click", event => {
           event.stopPropagation();
           appendReadRune(letters);
-          setStatus(`Added ${letters} to the read sequence.`, "ok");
+          setStatus(`Added ${displayLetters(letters)} to the read sequence.`, "ok");
         });
         card.appendChild(addButton);
 
@@ -718,9 +763,10 @@
     }
 
     function saveRune() {
-      const letters = normalizeLetters(lettersEl.value);
-      if (!validLetters(letters)) {
-        setStatus("Use one or two Finnish alphabet letters: A-Z, Å, Ä, Ö.", "err");
+      const normalizedLetters = normalizeLetters(lettersEl.value);
+      const letters = normalizedLetters || (isUnassignedRuneKey(selectedLetters || "") ? selectedLetters : makeUnassignedRuneKey());
+      if (!validRuneKey(letters)) {
+        setStatus("Use one or two Finnish alphabet letters, or leave the field empty for a placeholder rune.", "err");
         return;
       }
       if (activeEdges.size === 0) {
@@ -739,11 +785,13 @@
       selectedLetters = letters;
       persistRunes();
       renderAlphabet();
-      setStatus(`Saved rune for ${letters}.`, "ok");
+      setStatus(`Saved rune for ${displayLetters(letters)}.`, "ok");
     }
 
     function deleteSelectedRune() {
-      const letters = normalizeLetters(lettersEl.value || selectedLetters || "");
+      const letters = lettersEl.value.trim()
+        ? normalizeLetters(lettersEl.value)
+        : selectedLetters;
       if (!letters || !runeMap[letters]) {
         setStatus("Enter or select a saved rune to delete.", "err");
         return;
@@ -754,7 +802,7 @@
       selectedLetters = null;
       renderAlphabet();
       renderReadRunes();
-      setStatus(`Deleted rune for ${letters}.`, "ok");
+      setStatus(`Deleted rune for ${displayLetters(letters)}.`, "ok");
     }
 
     function clearDrawing() {
@@ -782,9 +830,9 @@
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const imported = JSON.parse(reader.result);
+          const imported = normalizeRuneMapKeys(JSON.parse(reader.result));
           for (const [letters, edges] of Object.entries(imported)) {
-            if (!validLetters(letters)) throw new Error(`Invalid letter key: ${letters}`);
+            if (!validRuneKey(letters)) throw new Error(`Invalid letter key: ${letters}`);
             if (!Array.isArray(edges) || !edges.every(edge => allEdgeKeys.includes(edge))) {
               throw new Error(`Invalid strokes for ${letters}`);
             }
