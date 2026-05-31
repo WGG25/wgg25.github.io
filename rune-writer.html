@@ -116,7 +116,7 @@
 
     .dot-center { fill: var(--accent); }
 
-    .controls, .letter-row, .actions, .write-controls {
+    .controls, .letter-row, .actions, .write-controls, .read-controls {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -219,6 +219,11 @@
       letter-spacing: 0.06em;
     }
 
+    .rune-card button {
+      padding: 6px 10px;
+      border-radius: 10px;
+    }
+
     .mini-rune {
       width: 78px;
       height: 78px;
@@ -240,14 +245,39 @@
       border-radius: 16px;
       padding: 14px;
       display: flex;
-      gap: 12px;
+      gap: 0;
       flex-wrap: wrap;
       align-items: center;
+    }
+
+    .read-output {
+      min-height: 96px;
+    }
+
+    .read-text {
+      min-height: 48px;
     }
 
     .word-break {
       width: 24px;
       height: 1px;
+    }
+
+    .rune-triplet {
+      --rune-size: 64px;
+      display: flex;
+      align-items: center;
+      margin-right: 10px;
+    }
+
+    .rune-triplet .mini-rune {
+      width: var(--rune-size);
+      height: var(--rune-size);
+      flex: 0 0 var(--rune-size);
+    }
+
+    .rune-triplet .mini-rune + .mini-rune {
+      margin-left: calc(var(--rune-size) * -0.4);
     }
 
     .unknown {
@@ -259,6 +289,7 @@
       place-items: center;
       color: var(--danger);
       font-weight: 700;
+      margin-right: 10px;
     }
 
     .help {
@@ -339,6 +370,18 @@
         </div>
         <div id="output" class="output" aria-label="Rune output"></div>
       </section>
+
+      <section>
+        <h2>Read runes as text</h2>
+        <div class="read-controls">
+          <button id="addCurrentRune" class="good">Add current rune</button>
+          <button id="addSpaceRune">Add space</button>
+          <button id="undoReadRune">Undo</button>
+          <button id="clearReadRunes">Clear</button>
+        </div>
+        <div id="readSequence" class="output read-output" aria-label="Selected rune sequence"></div>
+        <textarea id="readText" class="read-text" readonly placeholder="Selected runes will decode here"></textarea>
+      </section>
     </div>
   </main>
 
@@ -371,6 +414,7 @@
 
     let activeEdges = new Set();
     let selectedLetters = null;
+    let readRunes = [];
     let runeMap = loadRunes(); // { "A": ["TL-TR", ...], "KS": [...] }
 
     const builder = document.getElementById("builder");
@@ -378,6 +422,8 @@
     const statusEl = document.getElementById("status");
     const lettersEl = document.getElementById("letters");
     const output = document.getElementById("output");
+    const readSequence = document.getElementById("readSequence");
+    const readText = document.getElementById("readText");
 
     function setStatus(message, type = "") {
       statusEl.textContent = message;
@@ -476,6 +522,95 @@
       return svg;
     }
 
+    function makeUnknownToken(ch) {
+      const unknown = document.createElement("div");
+      unknown.className = "unknown";
+      unknown.textContent = ch;
+      unknown.title = `No rune assigned for ${ch}`;
+      return unknown;
+    }
+
+    function renderRuneSequence(container, tokens, size = 64) {
+      let triplet = null;
+      let tripletCount = 0;
+
+      function resetTriplet() {
+        triplet = null;
+        tripletCount = 0;
+      }
+
+      function appendBreak() {
+        resetTriplet();
+        container.appendChild(document.createElement("span")).className = "word-break";
+      }
+
+      function appendRune(edges) {
+        if (!triplet || tripletCount === 3) {
+          triplet = document.createElement("span");
+          triplet.className = "rune-triplet";
+          triplet.style.setProperty("--rune-size", `${size}px`);
+          container.appendChild(triplet);
+          tripletCount = 0;
+        }
+
+        triplet.appendChild(runeSvg(edges, size));
+        tripletCount++;
+      }
+
+      for (const token of tokens) {
+        if (token.type === "space") appendBreak();
+        else if (token.type === "unknown") {
+          resetTriplet();
+          container.appendChild(makeUnknownToken(token.value));
+        } else {
+          appendRune(token.edges);
+        }
+      }
+    }
+
+    function renderReadRunes() {
+      readSequence.innerHTML = "";
+
+      if (!readRunes.length) {
+        const empty = document.createElement("p");
+        empty.className = "help";
+        empty.textContent = "Click Add on saved runes, or draw/load a saved rune and click Add current rune.";
+        readSequence.appendChild(empty);
+      } else {
+        const tokens = readRunes
+          .map(letters => letters === " " ? { type: "space" } : { type: "rune", edges: runeMap[letters] })
+          .filter(token => token.type === "space" || token.edges);
+        renderRuneSequence(readSequence, tokens, 64);
+      }
+
+      readText.value = readRunes.join("");
+    }
+
+    function appendReadRune(letters) {
+      readRunes.push(letters);
+      renderReadRunes();
+    }
+
+    function findRuneLettersByEdges(edges) {
+      return Object.entries(runeMap).find(([, value]) => sameRune(value, edges))?.[0] || null;
+    }
+
+    function addCurrentRuneToRead() {
+      if (activeEdges.size === 0) {
+        setStatus("Draw or load a saved rune before adding it to the reader.", "err");
+        return;
+      }
+
+      const letters = findRuneLettersByEdges(canonicalEdgeList(activeEdges));
+      if (!letters) {
+        setStatus("The current rune shape is not assigned to any letters yet.", "err");
+        return;
+      }
+
+      appendReadRune(letters);
+      setStatus(`Added ${letters} to the read sequence.`, "ok");
+    }
+
     function renderAlphabet() {
       alphabet.innerHTML = "";
       const entries = Object.entries(runeMap).sort(([a], [b]) => a.localeCompare(b, "fi"));
@@ -506,8 +641,22 @@
 
         card.appendChild(runeSvg(edges));
         card.appendChild(label);
+
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.textContent = "Add";
+        addButton.title = `Add ${letters} to the read sequence`;
+        addButton.addEventListener("click", event => {
+          event.stopPropagation();
+          appendReadRune(letters);
+          setStatus(`Added ${letters} to the read sequence.`, "ok");
+        });
+        card.appendChild(addButton);
+
         alphabet.appendChild(card);
       }
+
+      renderReadRunes();
     }
 
     function saveRune() {
@@ -542,9 +691,11 @@
         return;
       }
       delete runeMap[letters];
+      readRunes = readRunes.filter(value => value !== letters);
       persistRunes();
       selectedLetters = null;
       renderAlphabet();
+      renderReadRunes();
       setStatus(`Deleted rune for ${letters}.`, "ok");
     }
 
@@ -581,8 +732,10 @@
             }
           }
           runeMap = imported;
+          readRunes = readRunes.filter(value => value === " " || runeMap[value]);
           persistRunes();
           renderAlphabet();
+          renderReadRunes();
           setStatus("Imported rune alphabet.", "ok");
         } catch (err) {
           setStatus(`Import failed: ${err.message}`, "err");
@@ -595,13 +748,14 @@
       output.innerHTML = "";
       const text = document.getElementById("textInput").value.toUpperCase();
       const mode = document.getElementById("matchingMode").value;
+      const tokens = [];
       let i = 0;
 
       while (i < text.length) {
         const ch = text[i];
 
         if (/\s/.test(ch)) {
-          output.appendChild(document.createElement("span")).className = "word-break";
+          tokens.push({ type: "space" });
           i++;
           continue;
         }
@@ -614,17 +768,15 @@
         else if (runeMap[two] && mode === "longest") match = two;
 
         if (match) {
-          output.appendChild(runeSvg(runeMap[match], 64));
+          tokens.push({ type: "rune", edges: runeMap[match] });
           i += match.length;
         } else {
-          const unknown = document.createElement("div");
-          unknown.className = "unknown";
-          unknown.textContent = ch;
-          unknown.title = `No rune assigned for ${ch}`;
-          output.appendChild(unknown);
+          tokens.push({ type: "unknown", value: ch });
           i++;
         }
       }
+
+      renderRuneSequence(output, tokens, 64);
     }
 
     document.getElementById("saveRune").addEventListener("click", saveRune);
@@ -644,6 +796,16 @@
     });
     document.getElementById("textInput").addEventListener("input", renderTextAsRunes);
     document.getElementById("matchingMode").addEventListener("change", renderTextAsRunes);
+    document.getElementById("addCurrentRune").addEventListener("click", addCurrentRuneToRead);
+    document.getElementById("addSpaceRune").addEventListener("click", () => appendReadRune(" "));
+    document.getElementById("undoReadRune").addEventListener("click", () => {
+      readRunes.pop();
+      renderReadRunes();
+    });
+    document.getElementById("clearReadRunes").addEventListener("click", () => {
+      readRunes = [];
+      renderReadRunes();
+    });
 
     lettersEl.addEventListener("input", () => {
       lettersEl.value = normalizeLetters(lettersEl.value);
@@ -651,6 +813,7 @@
 
     renderBuilder();
     renderAlphabet();
+    renderReadRunes();
   </script>
 </body>
 </html>
