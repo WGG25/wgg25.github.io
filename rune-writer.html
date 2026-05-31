@@ -280,6 +280,19 @@
       margin-left: calc(var(--rune-size) * -0.4);
     }
 
+    .rune-reversed {
+      transform: scaleX(-1);
+    }
+
+    .rune-card.next-reversed {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(242, 201, 76, 0.18);
+    }
+
+    .rune-card.next-reversed .mini-rune {
+      transform: scaleX(-1);
+    }
+
     .unknown {
       width: 64px;
       height: 64px;
@@ -558,7 +571,9 @@
           tripletCount = 0;
         }
 
-        triplet.appendChild(runeSvg(edges, size));
+        const svg = runeSvg(edges, size);
+        if (tripletCount === 2) svg.classList.add("rune-reversed");
+        triplet.appendChild(svg);
         tripletCount++;
       }
 
@@ -594,6 +609,7 @@
       }
 
       readText.value = readRunes.join("");
+      updateAlphabetSelectionState();
     }
 
     function appendReadRune(letters) {
@@ -621,6 +637,28 @@
       setStatus(`Added ${letters} to the read sequence.`, "ok");
     }
 
+    function nextReadRuneWillBeReversed() {
+      let runeCount = 0;
+
+      for (const value of readRunes) {
+        if (value === " " || value === "/") runeCount = 0;
+        else if (runeMap[value]) runeCount = (runeCount + 1) % 3;
+      }
+
+      return runeCount === 2;
+    }
+
+    function updateAlphabetSelectionState() {
+      const shouldReverse = nextReadRuneWillBeReversed();
+
+      for (const card of alphabet.querySelectorAll(".rune-card")) {
+        card.classList.toggle("next-reversed", shouldReverse);
+        card.title = shouldReverse
+          ? "Click to load this rune. Shift+click to add it reversed as the third rune."
+          : "Click to load this rune. Shift+click to add it to the read sequence.";
+      }
+    }
+
     function renderAlphabet() {
       alphabet.innerHTML = "";
       const entries = Object.entries(runeMap).sort(([a], [b]) => a.localeCompare(b, "fi"));
@@ -636,8 +674,14 @@
       for (const [letters, edges] of entries) {
         const card = document.createElement("div");
         card.className = "rune-card";
-        card.title = "Click to load this rune into the builder";
-        card.addEventListener("click", () => {
+        card.title = "Click to load this rune. Shift+click to add it to the read sequence.";
+        card.addEventListener("click", event => {
+          if (event.shiftKey) {
+            appendReadRune(letters);
+            setStatus(`Added ${letters} to the read sequence.`, "ok");
+            return;
+          }
+
           activeEdges = new Set(edges);
           selectedLetters = letters;
           lettersEl.value = letters;
@@ -667,6 +711,7 @@
       }
 
       renderReadRunes();
+      updateAlphabetSelectionState();
     }
 
     function saveRune() {
