@@ -775,10 +775,25 @@
       }
 
       const edges = canonicalEdgeList(activeEdges);
-      const duplicate = Object.entries(runeMap).find(([key, value]) => key !== letters && sameRune(value, edges));
-      if (duplicate) {
-        setStatus(`That shape is already assigned to ${duplicate[0]}.`, "err");
+      const previousKey = selectedLetters && runeMap[selectedLetters] && sameRune(runeMap[selectedLetters], edges)
+        ? selectedLetters
+        : null;
+      const existingTarget = runeMap[letters];
+      if (existingTarget && letters !== previousKey && !sameRune(existingTarget, edges)) {
+        setStatus(`${displayLetters(letters)} is already assigned to another rune.`, "err");
         return;
+      }
+
+      const duplicate = Object.entries(runeMap)
+        .find(([key, value]) => key !== letters && key !== previousKey && sameRune(value, edges));
+      if (duplicate) {
+        setStatus(`That shape is already assigned to ${displayLetters(duplicate[0])}.`, "err");
+        return;
+      }
+
+      if (previousKey && previousKey !== letters) {
+        delete runeMap[previousKey];
+        readRunes = readRunes.map(value => value === previousKey ? letters : value);
       }
 
       runeMap[letters] = edges;
