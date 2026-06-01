@@ -97,7 +97,7 @@
     }
 
     function letterRole(value) {
-      if (isUnassignedRuneKey(value)) return "unknown";
+      if (isUnassignedRuneKey(value)) return "empty";
 
       const roles = new Set(letterVariants(value).map(variant => {
         const chars = [...variant];
@@ -131,8 +131,9 @@
 
     function isInvalidTripletContinuation(existingRoles, nextRole) {
       if (!existingRoles.length) return false;
+      if (nextRole === "empty") return false;
       if (existingRoles.length === 1 && existingRoles[0] === nextRole && (nextRole === "consonant" || nextRole === "vowel")) return true;
-      if (existingRoles.length === 2 && existingRoles[0] === "consonant" && existingRoles[1] === "vowel" && nextRole !== "consonant") return true;
+      if (existingRoles.length === 2 && existingRoles[0] === "consonant" && existingRoles[1] === "vowel" && nextRole !== "consonant" && nextRole !== "empty") return true;
       return false;
     }
 
